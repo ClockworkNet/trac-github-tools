@@ -7,8 +7,8 @@ Expected header row is:
 `type,owner,status,milestone,keywords,summary,description`
 
 
-### Run The command (use ` --help` to see all options)
-`./trac-tool import:csv-to-github  --repo=tmulry/IssueLoaderPlayground --user=tmulry`
+### Run The command 
+`./trac-tool import:csv-to-github  --repo=tmulry/IssueLoaderPlayground --user=tmulry` (use ` --help` to see all options)
 
 ### Limitations
 
@@ -16,4 +16,4 @@ This script will create duplicate issues of the same title.  I suggest closing d
 
 Github aggressively limits content creation via API when the content creates notifications [https://developer.github.com/guides/best-practices-for-integrators/#dealing-with-abuse-rate-limits].  As a workaround, the import will wait one second between requests.
 
-Issue creation is limited if you don't have push access to repos.   Push access is required to set Assignee, labels, and milestone via the API.  Be very sure you know what repo you are using before loading a bunch of issues.
+Issue creation is limited if you don't have push access to repos.   Push access is required to set assignee, labels, and milestone via the API.  Be very sure you know what repo you are using before loading a bunch of issues.
