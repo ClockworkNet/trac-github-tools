@@ -35,7 +35,7 @@ class AddCSVToGithubCommand extends Command
             // the "--help" option
             ->setHelp('This command takes a csv file listing trac issues and adds them to a Github repo')
             ->addOption('columns', '-c',InputOption::VALUE_NONE, 'Show valid csv columns', null)
-            ->addOption('repo', null ,InputOption::VALUE_REQUIRED, 'Full owner and repo e.g. "michaelfoods/ops"', null)
+            ->addOption('repo', null ,InputOption::VALUE_REQUIRED, 'Full owner and repo e.g. "tmulry/TestRepo"', null)
             ->addOption('user', null ,InputOption::VALUE_REQUIRED, 'Github username.  must be authorized for selected repo', null)
 
             ->addArgument('filename',InputArgument::OPTIONAL, 'csv file to import');
