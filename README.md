@@ -1,12 +1,19 @@
-## Load Trac style CSV files into trac
+## Load Trac style CSV files as Github Issues
 
-## Clone the repo
+### Clone the repo
 
-## make a csv
+### make a csv with issue data
 Expected header row is:
 `type,owner,status,milestone,keywords,summary,description`
 
 
-## Run The command (use ` --help` to see all options)
+### Run The command (use ` --help` to see all options)
 `./trac-tool import:csv-to-github  --repo=tmulry/IssueLoaderPlayground --user=tmulry`
 
+### Limitations
+
+This script will create duplicate issues of the same title.  I suggest closing duplicate issues before you load.
+
+Github aggressively limits content creation via API when the content creates notifications [https://developer.github.com/guides/best-practices-for-integrators/#dealing-with-abuse-rate-limits].  As a result, the import will wait one second between requests.
+
+Issue creation is limited if you don't have push access to repos.   Push access is required to set Assignee, labels, and milestone via the API.  Be very sure you know what repo you are using before loading a bunch of issues.
