@@ -12,7 +12,7 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Helper\Table;
 use TracHandler\Csv\CsvImporter;
 use Symfony\Component\Console\Exception\InvalidArgumentException;
-
+use TracHandler\Github\Api\ImportClient as Client;
 
 class AddCSVToGithubCommand extends Command
 {
@@ -21,6 +21,9 @@ class AddCSVToGithubCommand extends Command
     protected $owner;
     protected $repo;
     protected $user;
+    protected $collaborators = [];
+    protected $milestones = [];
+    protected $issues = [];
 
     protected function configure()
     {
@@ -35,6 +38,7 @@ class AddCSVToGithubCommand extends Command
             // the "--help" option
             ->setHelp('This command takes a csv file listing trac issues and adds them to a Github repo')
             ->addOption('columns', '-c',InputOption::VALUE_NONE, 'Show valid csv columns', null)
+            ->addOption('token', '-t',InputOption::VALUE_NONE, 'Use GITHUB_API_TOKEN env var for auth', null)
             ->addOption('repo', null ,InputOption::VALUE_REQUIRED, 'Full owner and repo e.g. "tmulry/TestRepo"', null)
             ->addOption('user', null ,InputOption::VALUE_REQUIRED, 'Github username.  must be authorized for selected repo', null)
 
@@ -54,27 +58,40 @@ class AddCSVToGithubCommand extends Command
             return 0;
         }
 
-        //get github password from hidden prompt
-        $helper = $this->getHelper('question');
-        $question = new Question('Please enter your Github password: ', false);
-        $question->setHidden(true);
-        $question->setHiddenFallback(false);
-        $password = $helper->ask($input, $output, $question);
 
-        if (!$password) {
-            return;
+        if ($input->getOption('token')){
+            //using a personal API token and preset password to skip password prompt
+            $password = 'x-oauth-basic';
+            $this->user = getenv('GITHUB_API_TOKEN');
+            if ( !$this->user ){
+                throw new InvalidArgumentException("The GITHUB_API_TOKEN env var was not set", 1);
+            }
+        } else {
+            //get github password from hidden prompt
+            $helper = $this->getHelper('question');
+            $question = new Question('Please enter your Github password: ', false);
+            $question->setHidden(true);
+            $question->setHiddenFallback(false);
+            $password = $helper->ask($input, $output, $question);
+
+            if (!$password) {
+                return;
+            }
+
+            $this->user  =  $input->getOption('user');
         }
 
-
-        $this->user  =  $input->getOption('user');
-        $this->client = new \Github\Client();
+        $this->client = new Client(null,'golden-comet-preview');
 
         //pull owner and repo from owner/repo format
         list($this->owner, $this->repo) = explode('/', $input->getOption('repo'));
 
-        $this->client->authenticate($this->user, $password, \Github\Client::AUTH_HTTP_PASSWORD);
+        $this->client->authenticate($this->user, $password, Client::AUTH_HTTP_PASSWORD);
+
+        $this->user_name = $this->client->api('current_user')->show()["login"];
 
         $this->repoData = $this->client->api('repo')->show($this->owner,$this->repo);
+
 
 
         if($this->repoData["private"] === false){
@@ -121,18 +138,28 @@ class AddCSVToGithubCommand extends Command
             }
             if ($key > 1){
                 //Github cries foul if you try to POST too many issues at once, so do 1/second
-                sleep(1);
+                // this does not seem to be necessary when using Import vs create
+                // sleep(1);
             }
 
             //return null or the number of the given milestone
             $milestone_id  =  $this->findMilestoneNumber($issue["milestone"]);
             $labels        =  $this->parseKeywords($issue["keywords"]);
-            $assignee      =  ($issue["owner"]=="nobody") ? $this->user : $issue["owner"];
+            $assignees     =  ($issue["owner"]=="nobody" || $issue["owner"]=="" ) ? array($this->verifyUserHandle($this->user_name)) : array($this->verifyUserHandle($issue["owner"]));
             $title         =  $issue["summary"];
+            $issue_id      =  $this->findIssueNumber($title);
 
-            //todo add flag to update existing issue if it matches one that is already open
-            $issue = $this->client->api('issue')->create($this->owner, $this->repo, $this->buildIssue($title, $body, $assignee, $milestone_id, $labels ) );
-            echo "Created: " . $issue["url"];
+            //update existing issue if it matches one that is already open
+
+            if ( !$issue_id ) {
+                $issue = $this->client->api('issue')->configure()->import($this->owner, $this->repo, [ "issue" => $this->buildImportedIssue($title, $body, $assignees[0], $milestone_id, $labels ) ]);
+                $output->writeln( "Imported: " . $issue["url"]);
+            } else {
+                $issue = $this->client->api('issue')->configure()->update($this->owner, $this->repo, $issue_id, $this->buildExistingIssue($title, $body ) );
+                $output->writeln( "Updated: " . $issue["url"]);
+            }
+            $known_issues  =  $this->listIssues( );
+            array_push( $known_issues, $issue["url"] );
             array_push( $tabular_output, array($title , $issue["url"]) );
         }
 
@@ -160,10 +187,43 @@ class AddCSVToGithubCommand extends Command
 
     }
 
+    protected function verifyUserHandle( $handle )
+    {
+        try {
+            $user = $this->client->api('user')->show($handle);
+            if ($this->findCollaborator($handle) === null) {
+                return null;
+            }
+        } catch (\Github\Exception\RuntimeException $e) {
+            return null;
+        }
+        return $user["login"];
+    }
+
     protected function listMilestones( )
     {
-        $labels = $this->client->api('issue')->milestones()->all($this->owner, $this->repo);
-        return $labels;
+        if ( empty($this->milestones) ) {
+            $this->milestones = $this->client->api('issue')->milestones()->all($this->owner, $this->repo);
+
+        }
+        return $this->milestones;
+    }
+
+    protected function listCollaborators( )
+    {
+        if ( empty($this->collaborators) ) {
+
+            $this->collaborators = $this->client->api('repo')->collaborators()->all($this->owner,$this->repo);
+        }
+        return $this->collaborators;
+    }
+
+    protected function listIssues( )
+    {
+        if ( empty($this->issues) ) {
+            $this->issues  =  $this->client->api('issue')->all($this->owner,$this->repo, array('state' => 'open'));
+        }
+        return $this->issues;
     }
 
     //return null or the number of the matching milestone
@@ -176,13 +236,30 @@ class AddCSVToGithubCommand extends Command
             }
         }
 
-        //todo dynamically return id
         return null;
     }
 
-    //TODO determine a way to 1 to 1 search an issue based on csv, right now results are fuzzy
-    protected function findIssueBySummary($summary)
+    protected function findIssueNumber($summary)
     {
+        $issue_list = $this->listIssues( );
+        foreach ($issue_list as $key => $issue) {
+            if ( strtoupper($summary) === strtoupper($issue["title"]) ){
+                return $issue["number"];
+            }
+        }
+
+        return null;
+    }
+
+    protected function findCollaborator($handle)
+    {
+        $collaborator_list = $this->listCollaborators( );
+        foreach ($collaborator_list as $key => $collaborator) {
+            if ( strtoupper($handle) === strtoupper($collaborator["login"]) ){
+                return $collaborator["login"];
+            }
+        }
+
         return null;
     }
 
@@ -221,7 +298,10 @@ class AddCSVToGithubCommand extends Command
             ));
             return;
         }
-        //remove trac line breaks from dscription
+
+        //TODO add flag to convert "1." to github checkboxes? e.g. "1. widget\n" converts to  "- [ ] widget\n"
+        //remove trac line breaks and backslashes from description
+        $body  =  str_replace('\\\\', "", $body);
         return preg_replace('/\[\[BR\]\]/', "", $body);
 
     }
@@ -229,11 +309,11 @@ class AddCSVToGithubCommand extends Command
     /*
         @param title   string  The title of the issue.
         @param body    string  The contents of the issue.
-        @param assignee    string  Login for the user that this issue should be assigned to. NOTE: Only users with push access can set the assignee for new issues. The assignee is silently dropped otherwise. This field is deprecated.
+        @param assignee    string  User that this issue should be assigned to. NOTE: Only users with push access can set the assignee for new issues. The assignee is silently dropped otherwise. This field is deprecated.
         @param milestone   integer The number of the milestone to associate this issue with. NOTE: Only users with push access can set the milestone for new issues. The milestone is silently dropped otherwise.
         @param labels  array of strings    Labels to associate with this issue. NOTE: Only users with push access can set labels for new issues. Labels are silently dropped otherwise.
     */
-    protected function buildIssue ($title, $body, $assignee, $milestone, $labels ){
+    protected function buildImportedIssue ($title, $body, $assignee, $milestone, $labels ){
         return [
                 "title" => $title,
                 "body" => $body,
@@ -241,5 +321,40 @@ class AddCSVToGithubCommand extends Command
                 "milestone" => $milestone,
                 "labels" => $labels,
         ];
+    }
+
+    /*
+        @param title   string  The title of the issue.
+        @param body    string  The contents of the issue.
+        @param assignees    array  User that this issue should be assigned to. NOTE: Only users with push access can set the assignee for new issues. The assignee is silently dropped otherwise. This field is deprecated.
+        @param milestone   integer The number of the milestone to associate this issue with. NOTE: Only users with push access can set the milestone for new issues. The milestone is silently dropped otherwise.
+        @param labels  array of strings    Labels to associate with this issue. NOTE: Only users with push access can set labels for new issues. Labels are silently dropped otherwise.
+    */
+    protected function buildNewIssue ($title, $body, $assignees, $milestone, $labels ){
+        return [
+                "title" => $title,
+                "body" => $body,
+                "assignee" => $assignees[0],
+                "milestone" => $milestone,
+                "labels" => $labels,
+        ];
+    }
+
+    /*
+        @param title   string  The title of the issue.
+        @param body    string  The contents of the issue.
+
+    */
+    protected function buildExistingIssue ($title, $body) {
+        $issue = [];
+        if ($title){
+            $issue["title"] = $title;
+
+        }
+        if ($title){
+            $issue["body"] = $body;
+
+        }
+        return $issue;
     }
 }
