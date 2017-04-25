@@ -17,10 +17,15 @@ Expected header row is:
 `./trac-tool import:csv-to-github  --repo=tmulry/IssueLoaderPlayground --user=tmulry test.csv` (use ` --help` to see all options)
 
 
+### Auth options
+
+The default auth is user/password based. If you use the `-t` option, the script will accept a Personal Access token in the GITHUB_API_TOKEN env variable, so you don't need to enter your password every time.  Go to [https://github.com/settings/tokens] and set up a new token with full 'repo' permissions to get this working
+
+
 ### Limitations
 
 This script will create duplicate issues of the same title.  I suggest closing duplicate issues before you load.
 
-Github aggressively limits content creation via API when the content creates notifications [https://developer.github.com/guides/best-practices-for-integrators/#dealing-with-abuse-rate-limits].  As a workaround, the import will wait one second between requests.
+Github aggressively limits content creation via API when the content creates notifications [https://developer.github.com/guides/best-practices-for-integrators/#dealing-with-abuse-rate-limits].  As a workaround, the import uses the preview import functionality described here [https://gist.github.com/jonmagic/5282384165e0f86ef105#start-an-issue-import].  Issues are loaded in a batch and will be created asynchronously in the backend.  Use of this functionality requires ADMIN access to the repo you are loading to.
 
 Issue creation is limited if you don't have push access to repos.   Push access is required to set assignee, labels, and milestone via the API.  Be very sure you know what repo you are using before loading a bunch of issues.

@@ -93,7 +93,8 @@ class AddCSVToGithubCommand extends Command
         $this->repoData = $this->client->api('repo')->show($this->owner,$this->repo);
 
 
-
+        //todo Add flag to skip these prompts if the user has admin access
+        //todo if token auth and admin access, then allow piped csv input
         if($this->repoData["private"] === false){
             $helper = $this->getHelper('question');
             $question = new ConfirmationQuestion('You are loading issues to a public repository, Continue with this action (y/N)? ', false);
