@@ -2,6 +2,9 @@
 
 ### Clone the repo
 
+### Install composer
+`brew install homebrew/php/composer`
+
 ### make a csv with issue data
 Expected header row is:
 `type,owner,status,milestone,keywords,summary,description`
@@ -12,6 +15,10 @@ Expected header row is:
 `keywords` - Keywords can be comma separated, surronded in brackets.  They will be set to labels (e.g. `[KW1,KW2]` will put the labels of "KW1" and "KW2" on the issue )
 `summary` - this maps directly to the 'title' or headline on the issue.  If the summary matches an existing open issue, it will Update that issue
 `description` - Markdown string describing the body of the issue
+
+### install 
+cd into the project directory
+run `composer install`
 
 ### Run The command
 `./trac-tool import:csv-to-github  --repo=tmulry/IssueLoaderPlayground --user=tmulry test.csv` (use ` --help` to see all options)
