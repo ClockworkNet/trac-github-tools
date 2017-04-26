@@ -17,7 +17,7 @@ Expected header row is:
 `description` - Markdown string describing the body of the issue
 
 ### install 
-cd into the project directory
+cd into the project directory &&
 run `composer install`
 
 ### Run The command
