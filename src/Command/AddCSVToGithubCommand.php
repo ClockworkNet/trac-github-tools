@@ -118,6 +118,7 @@ class AddCSVToGithubCommand extends Command
         $csv_data_source  =  $this->getFileStream( $input );
         $csv              =  new CsvImporter($csv_data_source, true);
         $issue_data       =  $csv->get();
+
         //check header for extra columns
         if (empty($csv->getHeader()[0]) ) {
             throw new InvalidArgumentException("CSV Input contained an invalid header row", 1 );

@@ -12,6 +12,8 @@ class CsvImporter
     //--------------------------------------------------------------------
     function __construct($file_name, $parse_header=false, $delimiter=",", $length=8000)
     {
+        //gdocs and excel use CRLF in their csvs... So we need this switch enabled.
+        ini_set("auto_detect_line_endings", true);
         $this->fp = fopen($file_name, "r");
         $this->parse_header = $parse_header;
         $this->delimiter = $delimiter;
